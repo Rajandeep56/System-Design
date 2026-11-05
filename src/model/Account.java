@@ -23,12 +23,18 @@ class Account {
     }
     return false;
    }
-public void ensureActive() {
-    if (isFrozen()) {
-        throw new IllegalStateException("Account is frozen");
+    public void ensureActive() {
+        if (isFrozen()) {
+            throw new IllegalStateException("Account is frozen");
+        }
     }
-}
+    public int getAccountId() {
+        return this.accountId;
+    }
 
+    public long getBalance() {
+        return this.balance;
+    }
     public void deposit(long amount) {
             
            if (amount<=0) {
