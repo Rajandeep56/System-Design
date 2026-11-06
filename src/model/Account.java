@@ -32,10 +32,10 @@ class Account {
         return this.accountId;
     }
 
-    public long getBalance() {
+    public synchronized long getBalance() {
         return this.balance;
     }
-    public void deposit(long amount) {
+    public synchronized void deposit(long amount) {
             
            if (amount<=0) {
               throw new IllegalArgumentException("Amount can not be under 0");
@@ -44,13 +44,13 @@ class Account {
           balance = Math.addExact(balance, amount);
      }
 
-   public void withdraw(long amount) {
+   public synchronized void withdraw(long amount) {
       ensureActive();
-       if(amount > balance){
-           throw new IlleagalArgumentException("Balance is insufficient");
-       }
-       else if(amount <= 0){
+       if (amount <= 0){
            throw new IlleagalArgumentException("Add digit>0");
+       }
+       else (amount > balance){
+           throw new IlleagalArgumentException("Balance is insufficient");
        }
        else {
             balance-=amount;
