@@ -1,4 +1,3 @@
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 class TransferService {
     
@@ -6,9 +5,7 @@ class TransferService {
 
     public TransactionStatus transfer(Account from, Account to, long amount, String key) {
 
-        IdempotencyRecord newRecord = records.putIfAbsent(key, new IdempotencyRecord(key, id1, id2, amount, TransactionStatus.IN_PROGRESS));
-
-        IdempotencyRecord existing = records.putIfAbsent(key, new IdempotencyRecord(key, id1, id2, amount, TransactionStatus.IN_PROGRESS));
+     
 
         if(from == null || to == null) {
             throw new NullPointerException(" Account can not be null ");
@@ -24,44 +21,50 @@ class TransferService {
         if( amount <= 0 ) {
             throw new IllegalArgumentException("Amount is negative");
         }
-
         
-                IdempotencyRecord activeRecord;
-                // duplicate
-                if (existing != null) {
-                    boolean sameRequest = existing.getFromAccountId() == id1 && existing.getToAccountId() == id2 && existing.getAmount() == amount;
-                    if(!sameRequest) {
-                        throw new IllegalArgumentException(
-                            "Idempotency key reused with diff request details."
-                        );
-                    }
-                    TransactionStatus currentStatus = existing.getStatus();
-                    if (currentStatus == TransactionStatus.IN_PROGRESS) {
-                        throw new IllegalArgumentException("Transaction is Already underway. ");
-                    }
-                
-                 if (currentStatus == TransactionStatus.FAILED) { 
-                    // TODO: Implement retry claiming
-                    boolean claimed = existing.tryClaimRetry();
+        //     public IdempotencyRecord(int fromAccountId, int toAccountId, long amount, String key) {
 
-                    if(!claimed){
-                        throw new IllegalStateException("Retry already Claimed");
-                    }
 
-                    activeRecord = existing;
-                    } else {
-                        throw new IllegalStateException("Unknown Transaction status")
-                    }
-                }
-                else {
+        IdempotencyRecord newRecord =  new IdempotencyRecord( id1, id2, amount, key);
+        IdempotencyRecord activeRecord;
+        IdempotencyRecord existing = records.putIfAbsent(key, newRecord);
+        System.out.println("key = " + key);
+        System.out.println("newRecord null? " + (newRecord == null));       
+        // duplicate
+        if (existing != null) {
+            boolean sameRequest = existing.getFromAccountId() == id1 && existing.getToAccountId() == id2 && existing.getAmount() == amount;
+            if(!sameRequest) {
+                throw new IllegalArgumentException(
+                    "Idempotency key reused with diff request details."
+                );
+            }
+            TransactionStatus currentStatus = existing.getStatus();
+            if (currentStatus == TransactionStatus.IN_PROGRESS) {
+                throw new IllegalArgumentException("Transaction is Already underway. ");
+            }
+        
+            if (currentStatus == TransactionStatus.FAILED) { 
+            // TODO: Implement retry claiming
+            boolean claimed = existing.tryClaimRetry();
 
-                    activeRecord = newRecord;
-                }
-       
-        // not atomic But what if another thread changes or freezes the receiving account between those two operations?
-        // The sender could lose money while the receiver gets nothing.
-        // Also, another thread could modify the sender's balance after your initial validation.
-        // We need to lock both accounts throughout validation and the balance changes.
+            if(!claimed){
+                throw new IllegalStateException("Retry already Claimed");
+            }
+
+            activeRecord = existing;
+            } else {
+                throw new IllegalStateException("Unknown Transaction status");
+            }
+        }
+        else {
+
+            activeRecord = newRecord;
+        }
+
+// not atomic But what if another thread changes or freezes the receiving account between those two operations?
+// The sender could lose money while the receiver gets nothing.
+// Also, another thread could modify the sender's balance after your initial validation.
+// We need to lock both accounts throughout validation and the balance changes.
 
         Account first = id1 < id2 ? from : to;
         Account second = id1 < id2 ? to : from;
@@ -81,7 +84,7 @@ class TransferService {
                     }
                     Math.addExact(bal2, amount);
 
-                } catch (RuntimeException e)
+                } catch (RuntimeException e){
                     activeRecord.updateStatus(TransactionStatus.FAILED);
                     throw e;
                 }
@@ -104,4 +107,5 @@ class TransferService {
         activeRecord.updateStatus(TransactionStatus.COMPLETED);
         return TransactionStatus.COMPLETED;
     }
+}
 }

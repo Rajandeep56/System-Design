@@ -47,10 +47,9 @@ class Account {
    public synchronized void withdraw(long amount) {
       ensureActive();
        if (amount <= 0){
-           throw new IlleagalArgumentException("Add digit>0");
-       }
-       else (amount > balance){
-           throw new IlleagalArgumentException("Balance is insufficient");
+           throw new IllegalArgumentException("Add digit above0");
+       } else if (amount > balance){
+           throw new IllegalArgumentException("Balance is insufficient");
        }
        else {
             balance-=amount;
