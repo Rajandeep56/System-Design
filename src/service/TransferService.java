@@ -1,11 +1,28 @@
+import java.time.Instant;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+
 class TransferService {
     
     private final ConcurrentHashMap<String, IdempotencyRecord> records = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Transaction> history = new ConcurrentHashMap<>();
 
+    public Transaction getTransactionById(String transactionId){
+        return history.get(transactionId);
+    }
+
+    public List<Transaction> getTransactionsByAccount(long accountId) {
+        // Your implementation
+        List<Transaction> result = new ArrayList<>();
+        for(Transaction tx : history.values()) {
+            if(tx.getFromAccountId() == accountId || tx.getToAccountId()== accountId) {
+                result.add(tx);
+            }
+        }
+        return result;
+    }
+ 
     public TransactionStatus transfer(Account from, Account to, long amount, String key) {
-
-     
 
         if(from == null || to == null) {
             throw new NullPointerException(" Account can not be null ");
@@ -21,16 +38,11 @@ class TransferService {
         if( amount <= 0 ) {
             throw new IllegalArgumentException("Amount is negative");
         }
-        
-        //     public IdempotencyRecord(int fromAccountId, int toAccountId, long amount, String key) {
-
 
         IdempotencyRecord newRecord =  new IdempotencyRecord( id1, id2, amount, key);
         IdempotencyRecord activeRecord;
         IdempotencyRecord existing = records.putIfAbsent(key, newRecord);
-        System.out.println("key = " + key);
-        System.out.println("newRecord null? " + (newRecord == null));       
-        // duplicate
+          
         if (existing != null) {
             boolean sameRequest = existing.getFromAccountId() == id1 && existing.getToAccountId() == id2 && existing.getAmount() == amount;
             if(!sameRequest) {
@@ -44,12 +56,13 @@ class TransferService {
             }
         
             if (currentStatus == TransactionStatus.FAILED) { 
-            // TODO: Implement retry claiming
             boolean claimed = existing.tryClaimRetry();
 
             if(!claimed){
                 throw new IllegalStateException("Retry already Claimed");
             }
+            
+            history.get(key).updateStatus(TransactionStatus.IN_PROGRESS);
 
             activeRecord = existing;
             } else {
@@ -59,12 +72,9 @@ class TransferService {
         else {
 
             activeRecord = newRecord;
+            Transaction transaction = new Transaction(key, id1, id2, amount, TransactionStatus.IN_PROGRESS, Instant.now());
+            history.putIfAbsent(key, transaction);
         }
-
-// not atomic But what if another thread changes or freezes the receiving account between those two operations?
-// The sender could lose money while the receiver gets nothing.
-// Also, another thread could modify the sender's balance after your initial validation.
-// We need to lock both accounts throughout validation and the balance changes.
 
         Account first = id1 < id2 ? from : to;
         Account second = id1 < id2 ? to : from;
@@ -80,12 +90,22 @@ class TransferService {
 
                     if ( bal1 < amount  ) {
                         activeRecord.updateStatus(TransactionStatus.FAILED);
+                        history.get(key).updateStatus(TransactionStatus.FAILED);
                         throw new IllegalArgumentException("Amount exceeds balance");
                     }
                     Math.addExact(bal2, amount);
 
                 } catch (RuntimeException e){
-                    activeRecord.updateStatus(TransactionStatus.FAILED);
+                    if (activeRecord.getStatus() == TransactionStatus.IN_PROGRESS) {
+                        activeRecord.updateStatus(TransactionStatus.FAILED);
+                    }
+
+                    Transaction tx = history.get(key);
+                     if (tx != null &&
+                        tx.getStatus() == TransactionStatus.IN_PROGRESS) {
+                        tx.updateStatus(TransactionStatus.FAILED);
+                    }
+
                     throw e;
                 }
 
@@ -101,10 +121,12 @@ class TransferService {
                             "Transfer outcome uncertain; recovery required", depositError);
                 }
                 activeRecord.updateStatus(TransactionStatus.FAILED);
+                history.get(key).updateStatus(TransactionStatus.FAILED);
                 throw depositError;
             }
         }
         activeRecord.updateStatus(TransactionStatus.COMPLETED);
+        history.get(key).updateStatus(TransactionStatus.COMPLETED);
         return TransactionStatus.COMPLETED;
     }
 }

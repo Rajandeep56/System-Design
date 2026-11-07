@@ -21,7 +21,14 @@ public class TransferSimpleTest {
         }
         System.out.println("A: "+ a.getBalance());
         System.out.print("B "+ b.getBalance());
-        
+        a.deposit(100000);
+         try {
+            service.transfer(a, b, 150000, "txt-1");
+        } catch (Exception e) {
+             System.out.println( e.getMessage());
+        }
+        System.out.println("A: "+ a.getBalance());
+        System.out.print("B "+ b.getBalance());
         if (a.getBalance() != 100000 || b.getBalance() != 0) {
             throw new AssertionError("Insufficient funds test failed");
         }
