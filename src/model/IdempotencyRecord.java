@@ -30,8 +30,10 @@ class IdempotencyRecord {
         if(status != TransactionStatus.IN_PROGRESS){
             return false;
         }
-        if(newStatus != TransactionStatus.COMPLETED && newStatus != TransactionStatus.FAILED){
-            return false;
+        if (newStatus != TransactionStatus.COMPLETED &&
+            newStatus != TransactionStatus.FAILED &&
+            newStatus != TransactionStatus.RECOVERY_REQUIRED) {
+                return false;
         }
         status = newStatus;
         return true;
